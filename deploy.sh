@@ -96,7 +96,7 @@ cd "$APP_DIR"
 # Build Docker image
 docker build -t $IMAGE_NAME .
 
-# Stop and remove old container if exists
+# Stop and remove old container if it exists
 if docker ps -a --format '{{.Names}}' | grep -Eq "^$CONTAINER_NAME\$"; then
     docker stop $CONTAINER_NAME
     docker rm $CONTAINER_NAME
@@ -105,7 +105,7 @@ fi
 # Remove dangling networks (idempotency)
 docker network prune -f || true
 
-# Run container on host port 80
+# Run container on specified port
 docker run -d --name $CONTAINER_NAME -p $APP_PORT:$APP_PORT $IMAGE_NAME
 
 # Configure Nginx reverse proxy (overwrite if exists)
@@ -125,11 +125,11 @@ server {
 }
 NGINX_EOF
 
-# Replace placeholders
+# Replace placeholders inside the remote context
 sudo sed -i "s/REMOTE_IP_PLACEHOLDER/$REMOTE_IP/" "$NGINX_CONF"
 sudo sed -i "s/APP_PORT_PLACEHOLDER/$APP_PORT/" "$NGINX_CONF"
 
-# Link Nginx config (overwrite existing)
+# Link config and reload Nginx
 sudo ln -sf "$NGINX_CONF" /etc/nginx/sites-enabled/
 sudo nginx -t && sudo systemctl reload nginx
 
