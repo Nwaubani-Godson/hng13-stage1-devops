@@ -89,7 +89,7 @@ EOF
 rsync -av --exclude='.git' -e "ssh -i $SSH_KEY" "$REPO_NAME/" "$REMOTE_USER@$REMOTE_IP:$APP_DIR/"
 
 # ----- Deploy Docker Container & Configure Nginx -----
-$SSH_CMD bash <<EOF
+$SSH_CMD "bash -s" <<EOF
 set -euo pipefail
 cd "$APP_DIR"
 
@@ -110,13 +110,13 @@ docker run -d --name $CONTAINER_NAME -p $APP_PORT:$APP_PORT $IMAGE_NAME
 
 # Configure Nginx reverse proxy (overwrite if exists)
 NGINX_CONF="/etc/nginx/sites-available/hng13_stage1_app"
-sudo tee "$NGINX_CONF" > /dev/null <<NGINX_EOF
+sudo tee "\$NGINX_CONF" > /dev/null <<'NGINX_EOF'
 server {
     listen 80;
-    server_name REMOTE_IP_PLACEHOLDER;
+    server_name $REMOTE_IP;
 
     location / {
-        proxy_pass http://localhost:APP_PORT_PLACEHOLDER;
+        proxy_pass http://localhost:$APP_PORT;
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
@@ -125,12 +125,8 @@ server {
 }
 NGINX_EOF
 
-# Replace placeholders inside the remote context
-sudo sed -i "s/REMOTE_IP_PLACEHOLDER/$REMOTE_IP/" "$NGINX_CONF"
-sudo sed -i "s/APP_PORT_PLACEHOLDER/$APP_PORT/" "$NGINX_CONF"
-
 # Link config and reload Nginx
-sudo ln -sf "$NGINX_CONF" /etc/nginx/sites-enabled/
+sudo ln -sf "\$NGINX_CONF" /etc/nginx/sites-enabled/
 sudo nginx -t && sudo systemctl reload nginx
 
 # Validate deployment
