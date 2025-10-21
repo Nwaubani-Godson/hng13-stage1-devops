@@ -32,7 +32,7 @@ read -rp "Application internal container port: " APP_PORT
 
 # ----- Repository and Deployment Variables -----
 REPO_NAME=$(basename "$REPO_URL" .git)
-APP_DIR="~/hng13_stage1_app"
+APP_DIR="/home/$REMOTE_USER/hng13_stage1_app"
 IMAGE_NAME="hng13_stage1_app_image"
 CONTAINER_NAME="hng13_stage1_app_cont"
 
@@ -79,7 +79,7 @@ set -euo pipefail
 LOG_FILE="deploy_$(date +'%Y%m%d_%H%M%S').log"
 exec > >(tee -a "$LOG_FILE") 2>&1
 sudo apt-get update -y && sudo apt-get upgrade -y
-sudo apt-get install -y docker.io docker-compose nginx
+sudo apt-get install -y docker.io docker-compose nginx rsync curl git 
 sudo systemctl enable docker --now
 sudo systemctl enable nginx --now
 sudo usermod -aG docker $USER || true
@@ -106,17 +106,17 @@ fi
 docker network prune -f || true
 
 # Run container on host port 80
-docker run -d --name $CONTAINER_NAME -p 80:$APP_PORT $IMAGE_NAME
+docker run -d --name $CONTAINER_NAME -p $APP_PORT:$APP_PORT $IMAGE_NAME
 
 # Configure Nginx reverse proxy (overwrite if exists)
 NGINX_CONF="/etc/nginx/sites-available/hng13_stage1_app"
-sudo tee \$NGINX_CONF > /dev/null <<NGINX_EOF
+sudo tee "$NGINX_CONF" > /dev/null <<NGINX_EOF
 server {
     listen 80;
-    server_name $REMOTE_IP;
+    server_name REMOTE_IP_PLACEHOLDER;
 
     location / {
-        proxy_pass http://localhost:$APP_PORT;
+        proxy_pass http://localhost:APP_PORT_PLACEHOLDER;
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
@@ -125,8 +125,12 @@ server {
 }
 NGINX_EOF
 
+# Replace placeholders
+sudo sed -i "s/REMOTE_IP_PLACEHOLDER/$REMOTE_IP/" "$NGINX_CONF"
+sudo sed -i "s/APP_PORT_PLACEHOLDER/$APP_PORT/" "$NGINX_CONF"
+
 # Link Nginx config (overwrite existing)
-sudo ln -sf \$NGINX_CONF /etc/nginx/sites-enabled/
+sudo ln -sf "$NGINX_CONF" /etc/nginx/sites-enabled/
 sudo nginx -t && sudo systemctl reload nginx
 
 # Validate deployment
